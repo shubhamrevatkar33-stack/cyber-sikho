@@ -56,5 +56,105 @@ document.getElementById('year').textContent=new Date().getFullYear();
 const menuBtn=document.getElementById('menuBtn'), nav=document.getElementById('navlinks');
 menuBtn.addEventListener('click',()=>nav.classList.toggle('open'));
 nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>nav.classList.remove('open')));
+</script> 
+
+  
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(async function () {
+  const SUPABASE_URL = "https://laxbgwmuwaztvvsiqvdm.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_FpCa8O5GUrsO8l2VVhHH5g_5iHb4Yrd";
+
+  const client = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+  const grid = document.querySelector("#projects .grid");
+  if (!grid) return;
+
+  const { data, error } = await client
+    .from("projects")
+    .select("id,title,description,github_url,image_url")
+    .eq("is_published", true)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    grid.textContent = "Projects are temporarily unavailable.";
+    return;
+  }
+
+  grid.replaceChildren();
+
+  if (!data || data.length === 0) {
+    grid.textContent = "No published projects yet.";
+    return;
+  }
+
+  function safeUrl(value) {
+    try {
+      const url = new URL(value);
+      return ["https:", "http:"].includes(url.protocol) ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+
+  data.forEach(project => {
+    const card = document.createElement("article");
+    card.className = "card";
+
+    const top = document.createElement("div");
+    top.className = "project-top";
+
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    icon.textContent = "⌘";
+
+    const status = document.createElement("span");
+    status.className = "status";
+    status.textContent = "PUBLISHED";
+
+    top.append(icon, status);
+
+    const title = document.createElement("h3");
+    title.textContent = project.title || "Untitled Project";
+
+    const description = document.createElement("p");
+    description.textContent = project.description || "";
+
+    card.append(top);
+
+    const imageUrl = safeUrl(project.image_url || "");
+    if (imageUrl) {
+      const img = document.createElement("img");
+      img.src = imageUrl;
+      img.alt = project.title || "Project image";
+      img.loading = "lazy";
+      img.style.width = "100%";
+      img.style.borderRadius = "10px";
+      img.style.marginBottom = "14px";
+      card.append(img);
+    }
+
+    card.append(title, description);
+
+    const githubUrl = safeUrl(project.github_url || "");
+    if (githubUrl) {
+      const link = document.createElement("a");
+      link.className = "project-link";
+      link.href = githubUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "View on GitHub →";
+      card.append(link);
+    }
+
+    grid.append(card);
+  });
+})();
 </script>
-</body></html>
+
+  
+</body> 
+</html> 
