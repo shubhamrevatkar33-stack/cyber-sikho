@@ -1,0 +1,220 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBER SIKHO | Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#050907;color:#d7ffe4;font-family:Arial,sans-serif;padding:20px}
+.wrap{max-width:700px;margin:auto}
+h1{color:#00ff66;text-align:center}
+h2{color:#00ff66}
+.panel{background:#0b1710;border:1px solid #087d38;border-radius:12px;padding:18px;margin:18px 0}
+input,textarea{width:100%;padding:12px;margin:8px 0 14px;background:#020604;color:#fff;border:1px solid #168b45;border-radius:7px}
+textarea{min-height:90px}
+button{background:#00d957;color:#001b09;border:0;border-radius:7px;padding:12px 16px;font-weight:bold;margin:5px;cursor:pointer}
+button.danger{background:#d93636;color:white}
+button.secondary{background:#183d28;color:white}
+.hidden{display:none}
+small{color:#9db9a6}
+.project{border:1px solid #245b38;padding:12px;border-radius:8px;margin:12px 0}
+#status{color:#00ff66;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>CYBER SIKHO</h1>
+<p style="text-align:center">SECURE ADMIN CONTROL PANEL</p>
+<p id="status">Connecting...</p>
+
+<section id="login" class="panel hidden">
+<h2>Admin Login</h2>
+<form id="loginForm">
+<label>Email</label>
+<input id="email" type="email" required autocomplete="username">
+<label>Password</label>
+<input id="password" type="password" required autocomplete="current-password">
+<button type="submit">LOGIN</button>
+</form>
+</section>
+
+<section id="dashboard" class="hidden">
+<div class="panel">
+<h2>Project Manager</h2>
+<button class="secondary" id="logout">Logout</button>
+<form id="projectForm">
+<input type="hidden" id="projectId">
+<label>Project Title</label>
+<input id="title" required maxlength="100">
+<label>Description</label>
+<textarea id="description" required maxlength="1000"></textarea>
+<label>GitHub URL</label>
+<input id="github" type="url" placeholder="https://github.com/...">
+<label>Image URL (optional)</label>
+<input id="image" type="url" placeholder="https://...">
+<label><input id="published" type="checkbox" checked style="width:auto"> Publish project</label>
+<br>
+<button type="submit" id="saveBtn">ADD PROJECT</button>
+<button type="button" class="secondary" id="cancelEdit">CLEAR</button>
+</form>
+</div>
+<div class="panel">
+<h2>Your Projects</h2>
+<div id="projectsList">Loading...</div>
+</div>
+</section>
+</div>
+
+<script>
+const SUPABASE_URL = " https://laxbgwmuwaztvvsiqvdm.supabase.co/rest/v1/    ";
+const SUPABASE_PUBLISHABLE_KEY = "  sb_publishable_FpCa8O5GUrsO8l2VVhHH5g_5iHb4Yrd  ";
+
+const statusBox = document.getElementById("status");
+const loginBox = document.getElementById("login");
+const dashboard = document.getElementById("dashboard");
+
+const client = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+function status(message){statusBox.textContent=message;}
+
+function escapeHTML(value){
+ return String(value ?? "").replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+ }[c]));
+}
+
+function resetForm(){
+ document.getElementById("projectForm").reset();
+ document.getElementById("projectId").value="";
+ document.getElementById("saveBtn").textContent="ADD PROJECT";
+}
+
+async function checkAdmin(){
+ const {data:{session}}=await client.auth.getSession();
+ if(!session){
+  dashboard.classList.add("hidden");
+  loginBox.classList.remove("hidden");
+  status("Please login with your admin account.");
+  return;
+ }
+
+ const {data,error}=await client.rpc("is_cyber_sikho_admin");
+ if(error || data !== true){
+  await client.auth.signOut();
+  dashboard.classList.add("hidden");
+  loginBox.classList.remove("hidden");
+  status("Access denied. This account is not an authorized admin.");
+  return;
+ }
+
+ loginBox.classList.add("hidden");
+ dashboard.classList.remove("hidden");
+ status("Admin verified. Secure connection active.");
+ await loadProjects();
+}
+
+document.getElementById("loginForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ status("Checking login...");
+ const {error}=await client.auth.signInWithPassword({
+  email:document.getElementById("email").value.trim(),
+  password:document.getElementById("password").value
+ });
+ if(error){status("Login failed: "+error.message);return;}
+ await checkAdmin();
+});
+
+document.getElementById("logout").addEventListener("click",async()=>{
+ await client.auth.signOut();
+ resetForm();
+ await checkAdmin();
+});
+
+async function loadProjects(){
+ const list=document.getElementById("projectsList");
+ list.textContent="Loading projects...";
+ const {data,error}=await client.from("projects")
+  .select("*").order("created_at",{ascending:false});
+ if(error){list.textContent="Error: "+error.message;return;}
+ if(!data.length){list.textContent="No projects added yet.";return;}
+
+ list.innerHTML="";
+ data.forEach(p=>{
+  const item=document.createElement("div");
+  item.className="project";
+  item.innerHTML=`
+   <strong>${escapeHTML(p.title)}</strong>
+   <p>${escapeHTML(p.description)}</p>
+   <small>${p.is_published?"Published":"Draft"}</small><br>
+   <button class="secondary" data-edit="${escapeHTML(p.id)}">EDIT</button>
+   <button class="danger" data-delete="${escapeHTML(p.id)}">DELETE</button>
+  `;
+  list.appendChild(item);
+ });
+}
+
+document.getElementById("projectForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const id=document.getElementById("projectId").value;
+ const project={
+  title:document.getElementById("title").value.trim(),
+  description:document.getElementById("description").value.trim(),
+  github_url:document.getElementById("github").value.trim()||null,
+  image_url:document.getElementById("image").value.trim()||null,
+  is_published:document.getElementById("published").checked,
+  updated_at:new Date().toISOString()
+ };
+ if(!project.title||!project.description){status("Title and description required.");return;}
+
+ status("Saving project...");
+ let result;
+ if(id){
+  result=await client.from("projects").update(project).eq("id",id);
+ }else{
+  result=await client.from("projects").insert(project);
+ }
+ if(result.error){status("Save failed: "+result.error.message);return;}
+ status("Project saved successfully.");
+ resetForm();
+ await loadProjects();
+});
+
+document.getElementById("projectsList").addEventListener("click",async e=>{
+ const editId=e.target.dataset.edit;
+ const deleteId=e.target.dataset.delete;
+
+ if(editId){
+  const {data,error}=await client.from("projects").select("*").eq("id",editId).single();
+  if(error){status(error.message);return;}
+  document.getElementById("projectId").value=data.id;
+  document.getElementById("title").value=data.title;
+  document.getElementById("description").value=data.description;
+  document.getElementById("github").value=data.github_url||"";
+  document.getElementById("image").value=data.image_url||"";
+  document.getElementById("published").checked=data.is_published;
+  document.getElementById("saveBtn").textContent="UPDATE PROJECT";
+  window.scrollTo({top:0,behavior:"smooth"});
+ }
+
+ if(deleteId){
+  if(!confirm("Delete this project permanently?"))return;
+  const {error}=await client.from("projects").delete().eq("id",deleteId);
+  if(error){status("Delete failed: "+error.message);return;}
+  status("Project deleted.");
+  await loadProjects();
+ }
+});
+
+document.getElementById("cancelEdit").addEventListener("click",resetForm);
+
+checkAdmin();
+</script>
+</body>
+</html>
